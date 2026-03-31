@@ -30,6 +30,9 @@ function copyIchijiHoikuNisshi() {
 
   const sheetName = month + '月';
 
+  // 必要な列数（マスターの最大列 or 最低26列確保）
+  const numCols = Math.max(masterSheet.getLastColumn(), masterSheet.getMaxColumns());
+
   // 既存シートの確認
   let targetSheet = ss.getSheetByName(sheetName);
   if (targetSheet) {
@@ -41,9 +44,10 @@ function copyIchijiHoikuNisshi() {
     );
     if (response !== ui.Button.YES) return;
 
-    // 既存シートをクリア
-    targetSheet.clearContents();
-    targetSheet.clearFormats();
+    // マージを解除してからクリア（マージが残っていると再コピー時に崩れる）
+    targetSheet.getRange(1, 1, targetSheet.getMaxRows(), targetSheet.getMaxColumns()).breakApart();
+    targetSheet.clear();
+
     // 必要な行数を確保
     const needed = 13 * 60;
     if (targetSheet.getMaxRows() < needed) {
@@ -59,29 +63,25 @@ function copyIchijiHoikuNisshi() {
   }
 
   // マスターの範囲（1:13）を取得
-  const numCols = masterSheet.getLastColumn();
-  const masterRange = masterSheet.getRange(1, 1, 13, numCols);
+  const masterRange = masterSheet.getRange(1, 1, 13, masterSheet.getMaxColumns());
 
-  // 60枚分、縦持ちで貼り付け
+  // 列幅をマスターに合わせる（先に設定することで貼り付け後の表示が正しくなる）
+  for (let col = 1; col <= masterSheet.getMaxColumns(); col++) {
+    targetSheet.setColumnWidth(col, masterSheet.getColumnWidth(col));
+  }
+
+  // 60枚分、縦持ちで貼り付け（paste typeを指定しない = 値・書式・マージすべてコピー）
   for (let i = 0; i < 60; i++) {
     const destRow = i * 13 + 1;
-    const destRange = targetSheet.getRange(destRow, 1, 13, numCols);
-    masterRange.copyTo(destRange, SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
-  }
-
-  // 列幅をマスターに合わせる
-  for (let col = 1; col <= numCols; col++) {
-    const width = masterSheet.getColumnWidth(col);
-    targetSheet.setColumnWidth(col, width);
-  }
-
-  // 行の高さをマスターに合わせる
-  for (let row = 1; row <= 13; row++) {
-    const height = masterSheet.getRowHeight(row);
-    for (let i = 0; i < 60; i++) {
-      targetSheet.setRowHeight(i * 13 + row, height);
+    const destRange = targetSheet.getRange(destRow, 1, 13, masterSheet.getMaxColumns());
+    masterRange.copyTo(destRange);
+    // 行の高さをマスターに合わせる
+    for (let row = 1; row <= 13; row++) {
+      targetSheet.setRowHeight(destRow + row - 1, masterSheet.getRowHeight(row));
     }
   }
+
+  SpreadsheetApp.flush();
 
   SpreadsheetApp.getUi().alert(
     '完了',
